@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>DevServers</string>
+    <string>Perch</string>
     <key>CFBundleIdentifier</key>
-    <string>com.local.DevServers</string>
+    <string>com.local.Perch</string>
     <key>CFBundleName</key>
-    <string>DevServers</string>
+    <string>Perch</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>

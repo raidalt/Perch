@@ -12,7 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Launch at Login (LaunchAgent)
 
-    let launchAgentLabel = "com.local.DevServers"
+    let launchAgentLabel = "com.local.Perch"
 
     var launchAgentPath: String {
         let home = NSHomeDirectory()

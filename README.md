@@ -1,4 +1,4 @@
-# DevServers
+# Perch
 
 macOS menu bar utility that detects running dev servers and lets you open or kill them with one click.
 
@@ -23,26 +23,26 @@ Next.js, Vite, Webpack, React Scripts, Angular, Nuxt, SvelteKit, Remix, Astro, P
 
 ### From DMG
 
-Download `DevServers.dmg` from [Releases](../../releases), open it, and drag `DevServers.app` to Applications.
+Download `Perch.dmg` from [Releases](../../releases), open it, and drag `Perch.app` to Applications.
 
 Since the app isn't signed, right-click > **Open** the first time.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/raidalt/DevServers.git
-cd DevServers
-swiftc -o DevServers.app/Contents/MacOS/DevServers main.swift -framework Cocoa
-open DevServers.app
+git clone https://github.com/raidalt/Perch.git
+cd Perch
+swiftc -o Perch.app/Contents/MacOS/Perch main.swift -framework Cocoa
+open Perch.app
 ```
 
 ### Build DMG
 
 ```bash
-mkdir -p /tmp/DevServers-dmg
-cp -R DevServers.app /tmp/DevServers-dmg/
-ln -s /Applications /tmp/DevServers-dmg/Applications
-hdiutil create -volname "DevServers" -srcfolder /tmp/DevServers-dmg -ov -format UDZO DevServers.dmg
+mkdir -p /tmp/Perch-dmg
+cp -R Perch.app /tmp/Perch-dmg/
+ln -s /Applications /tmp/Perch-dmg/Applications
+hdiutil create -volname "Perch" -srcfolder /tmp/Perch-dmg -ov -format UDZO Perch.dmg
 ```
 
 ## How it works
