@@ -23,26 +23,30 @@ Next.js, Vite, Webpack, React Scripts, Angular, Nuxt, SvelteKit, Remix, Astro, P
 
 ### From DMG
 
-Download `Perch.dmg` from [Releases](../../releases), open it, and drag `Perch.app` to Applications.
+1. Download `Perch.dmg` from [Releases](../../releases)
+2. Open it and drag `Perch.app` to Applications
+3. Open Terminal and run:
+   ```bash
+   xattr -cr /Applications/Perch.app
+   ```
+4. Double-click Perch in Applications
 
-Since the app isn't signed, right-click > **Open** the first time.
+Step 3 removes the macOS quarantine flag. This is needed because the app isn't notarized with Apple. You only need to do this once.
+
+**If you skip step 3** and macOS blocks the app: go to **System Settings > Privacy & Security**, scroll down, and click **Open Anyway** next to the Perch message.
+
+After the first launch, updates are delivered automatically through the app menu — no re-downloading needed.
 
 ### Build from source
 
 ```bash
 git clone https://github.com/raidalt/Perch.git
 cd Perch
-swiftc -o Perch.app/Contents/MacOS/Perch main.swift -framework Cocoa
+swiftc -target arm64-apple-macos12.0 -o /tmp/Perch-arm64 main.swift -framework Cocoa
+swiftc -target x86_64-apple-macos12.0 -o /tmp/Perch-x86_64 main.swift -framework Cocoa
+lipo -create /tmp/Perch-arm64 /tmp/Perch-x86_64 -output Perch.app/Contents/MacOS/Perch
+codesign --force --deep --sign - Perch.app
 open Perch.app
-```
-
-### Build DMG
-
-```bash
-mkdir -p /tmp/Perch-dmg
-cp -R Perch.app /tmp/Perch-dmg/
-ln -s /Applications /tmp/Perch-dmg/Applications
-hdiutil create -volname "Perch" -srcfolder /tmp/Perch-dmg -ov -format UDZO Perch.dmg
 ```
 
 ## How it works
