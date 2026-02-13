@@ -1,5 +1,7 @@
 import Cocoa
 
+let currentVersion = "1.1.0"
+
 struct DevServer {
     let pid: Int32
     let port: Int
@@ -9,6 +11,114 @@ struct DevServer {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var timer: Timer?
+
+    // MARK: - Auto-update
+
+    var availableUpdate: (version: String, url: URL)? = nil
+    var isUpdating = false
+
+    func checkForUpdates() {
+        let url = URL(string: "https://api.github.com/repos/raidalt/Perch/releases/latest")!
+        var request = URLRequest(url: url)
+        request.setValue("Perch/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tagName = json["tag_name"] as? String,
+                  let assets = json["assets"] as? [[String: Any]] else { return }
+
+            let version = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+            guard self.isNewer(version, than: currentVersion) else { return }
+
+            for asset in assets {
+                if let name = asset["name"] as? String, name.hasSuffix(".zip"),
+                   let urlStr = asset["browser_download_url"] as? String,
+                   let url = URL(string: urlStr) {
+                    DispatchQueue.main.async {
+                        self.availableUpdate = (version, url)
+                        self.updateMenu()
+                    }
+                    return
+                }
+            }
+        }.resume()
+    }
+
+    func isNewer(_ remote: String, than local: String) -> Bool {
+        let r = remote.split(separator: ".").compactMap { Int($0) }
+        let l = local.split(separator: ".").compactMap { Int($0) }
+        for i in 0..<max(r.count, l.count) {
+            let rv = i < r.count ? r[i] : 0
+            let lv = i < l.count ? l[i] : 0
+            if rv > lv { return true }
+            if rv < lv { return false }
+        }
+        return false
+    }
+
+    func performUpdate() {
+        guard let update = availableUpdate, !isUpdating else { return }
+        isUpdating = true
+        updateMenu()
+
+        URLSession.shared.downloadTask(with: update.url) { localURL, _, error in
+            guard let localURL = localURL, error == nil else {
+                DispatchQueue.main.async {
+                    self.isUpdating = false
+                    self.updateMenu()
+                }
+                return
+            }
+
+            let fm = FileManager.default
+            let tmpDir = NSTemporaryDirectory() + "Perch-update"
+            try? fm.removeItem(atPath: tmpDir)
+            try? fm.createDirectory(atPath: tmpDir, withIntermediateDirectories: true)
+
+            let zipPath = tmpDir + "/Perch.zip"
+            try? fm.moveItem(at: localURL, to: URL(fileURLWithPath: zipPath))
+
+            // Unzip
+            let unzip = Process()
+            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            unzip.arguments = ["-xk", zipPath, tmpDir]
+            try? unzip.run()
+            unzip.waitUntilExit()
+
+            let newAppPath = tmpDir + "/Perch.app"
+            let appPath = Bundle.main.bundlePath
+
+            guard fm.fileExists(atPath: newAppPath) else {
+                DispatchQueue.main.async {
+                    self.isUpdating = false
+                    self.updateMenu()
+                }
+                return
+            }
+
+            // Replace and relaunch
+            do {
+                try fm.removeItem(atPath: appPath)
+                try fm.moveItem(atPath: newAppPath, toPath: appPath)
+            } catch {
+                DispatchQueue.main.async {
+                    self.isUpdating = false
+                    self.updateMenu()
+                }
+                return
+            }
+
+            // Relaunch via detached shell (waits for this process to exit)
+            DispatchQueue.main.async {
+                let relaunch = Process()
+                relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+                relaunch.arguments = ["-c", "sleep 1 && open '\(appPath)'"]
+                try? relaunch.run()
+                NSApp.terminate(nil)
+            }
+        }.resume()
+    }
 
     // MARK: - Launch at Login (LaunchAgent)
 
@@ -59,19 +169,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSColor.labelColor.setStroke()
             NSColor.labelColor.setFill()
 
-            // Terminal/console bracket icon: >_
             let path = NSBezierPath()
             path.lineWidth = 1.5
             path.lineCapStyle = .round
             path.lineJoinStyle = .round
 
-            // ">" chevron
             path.move(to: NSPoint(x: 3, y: 13))
             path.line(to: NSPoint(x: 8, y: 9))
             path.line(to: NSPoint(x: 3, y: 5))
             path.stroke()
 
-            // "_" underscore cursor
             let underline = NSBezierPath()
             underline.lineWidth = 1.5
             underline.lineCapStyle = .round
@@ -93,6 +200,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateMenu()
         timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
             self.updateMenu()
+        }
+
+        // Check for updates on launch, then every 4 hours
+        checkForUpdates()
+        Timer.scheduledTimer(withTimeInterval: 4 * 3600, repeats: true) { _ in
+            self.checkForUpdates()
         }
     }
 
@@ -167,7 +280,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let listeners = parseLsof(lsofOutput)
         if listeners.isEmpty { return [] }
 
-        // Deduplicate by pid+port (lsof may list IPv4 and IPv6 separately)
         var seen = Set<String>()
         var unique: [ListeningProcess] = []
         for l in listeners {
@@ -177,7 +289,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Get full command lines via ps
         let pids = Array(Set(unique.map { $0.pid }))
         let pidStr = pids.map { String($0) }.joined(separator: ",")
         let psOutput = runCommand("/bin/ps", ["-p", pidStr, "-o", "pid=,command="]) ?? ""
@@ -373,11 +484,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             menu.addItem(NSMenuItem.separator())
 
+            // Update item
+            if self.isUpdating {
+                let updating = NSMenuItem(title: "Updating...", action: nil, keyEquivalent: "")
+                updating.isEnabled = false
+                menu.addItem(updating)
+            } else if let update = self.availableUpdate {
+                let updateItem = NSMenuItem(title: "Update to v\(update.version)", action: #selector(self.updateClicked), keyEquivalent: "")
+                updateItem.target = self
+                menu.addItem(updateItem)
+            }
+
             // Launch at Login toggle
             let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(self.toggleLaunchAtLogin), keyEquivalent: "")
             loginItem.target = self
             loginItem.state = self.isLaunchAtLoginEnabled ? .on : .off
             menu.addItem(loginItem)
+
+            let versionItem = NSMenuItem(title: "v\(currentVersion)", action: nil, keyEquivalent: "")
+            versionItem.isEnabled = false
+            menu.addItem(versionItem)
 
             menu.addItem(NSMenuItem.separator())
             menu.addItem(NSMenuItem(title: "Quit", action: #selector(self.quit), keyEquivalent: "q"))
@@ -399,6 +525,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func killAllClicked() {
         killAllServers()
+    }
+
+    @objc func updateClicked() {
+        performUpdate()
     }
 
     @objc func toggleLaunchAtLogin() {
