@@ -51,8 +51,8 @@ After the first launch, updates are delivered automatically through the app menu
 git clone https://github.com/raidalt/Perch.git
 cd Perch
 SOURCES=$(find Sources -name '*.swift' | sort)
-swiftc -target arm64-apple-macos12.0 -o /tmp/Perch-arm64 main.swift $SOURCES -framework Cocoa
-swiftc -target x86_64-apple-macos12.0 -o /tmp/Perch-x86_64 main.swift $SOURCES -framework Cocoa
+swiftc -target arm64-apple-macos12.0 -o /tmp/Perch-arm64 main.swift $SOURCES -framework Cocoa -framework Carbon
+swiftc -target x86_64-apple-macos12.0 -o /tmp/Perch-x86_64 main.swift $SOURCES -framework Cocoa -framework Carbon
 lipo -create /tmp/Perch-arm64 /tmp/Perch-x86_64 -output Perch.app/Contents/MacOS/Perch
 codesign --force --deep --sign - Perch.app
 open Perch.app

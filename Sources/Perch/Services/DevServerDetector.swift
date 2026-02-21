@@ -35,9 +35,13 @@ final class DevServerDetector {
 
         let psOutput = commandRunner.run("/bin/ps", ["-p", pidStr, "-o", "pid=,command="]) ?? ""
         let cwdOutput = commandRunner.run("/usr/sbin/lsof", ["-a", "-p", pidStr, "-d", "cwd", "-Fn"]) ?? ""
+        let statsOutput = commandRunner.run("/bin/ps", ["-p", pidStr, "-o", "pid=,pcpu=,rss="]) ?? ""
+        let lstartOutput = commandRunner.run("/bin/ps", ["-p", pidStr, "-o", "pid=,lstart="]) ?? ""
 
         let cwdByPid = parsePidPathMap(cwdOutput)
         let commandByPid = parsePsOutput(psOutput)
+        let statsByPid = parseStatsOutput(statsOutput)
+        let startTimeByPid = parseLstartOutput(lstartOutput)
 
         var portsByPid: [Int32: [Int]] = [:]
         for listener in unique {
@@ -61,13 +65,19 @@ final class DevServerDetector {
 
             let projectPath = normalizeProjectPath(cwdByPid[listener.pid])
             let appName = inferAppName(cwd: projectPath, command: command)
+            let stats = statsByPid[listener.pid]
+
             servers.append(
                 DevServer(
                     pid: listener.pid,
                     port: lowestPort,
                     label: label,
                     appName: appName,
-                    projectPath: projectPath
+                    projectPath: projectPath,
+                    command: commandByPid[listener.pid],
+                    startTime: startTimeByPid[listener.pid],
+                    cpuPercent: stats?.cpu,
+                    memoryMB: stats?.memMB
                 )
             )
         }
@@ -90,6 +100,51 @@ final class DevServerDetector {
         }
 
         return commandByPid
+    }
+
+    private func parseStatsOutput(_ output: String) -> [Int32: (cpu: Double, memMB: Int)] {
+        var result: [Int32: (cpu: Double, memMB: Int)] = [:]
+
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+
+            let parts = trimmed.split(separator: " ", omittingEmptySubsequences: true)
+            guard parts.count >= 3,
+                  let pid = Int32(parts[0]),
+                  let cpu = Double(parts[1]),
+                  let rss = Int(parts[2]) else { continue }
+
+            result[pid] = (cpu: cpu, memMB: rss / 1024)
+        }
+
+        return result
+    }
+
+    private func parseLstartOutput(_ output: String) -> [Int32: Date] {
+        var result: [Int32: Date] = [:]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+
+        for line in output.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+
+            let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard parts.count == 2, let pid = Int32(parts[0]) else { continue }
+
+            var dateStr = String(parts[1])
+            while dateStr.contains("  ") {
+                dateStr = dateStr.replacingOccurrences(of: "  ", with: " ")
+            }
+
+            if let date = formatter.date(from: dateStr) {
+                result[pid] = date
+            }
+        }
+
+        return result
     }
 
     private func parseLsof(_ output: String) -> [ListeningProcess] {

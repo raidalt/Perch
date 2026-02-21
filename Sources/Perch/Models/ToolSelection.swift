@@ -1,5 +1,31 @@
 import Foundation
 
+enum PreferredBrowser: String, CaseIterable {
+    case `default`
+    case safari
+    case chrome
+    case firefox
+    case arc
+    case brave
+    case edge
+    case vivaldi
+    case opera
+
+    var title: String {
+        switch self {
+        case .default: return "Default Browser"
+        case .safari: return "Safari"
+        case .chrome: return "Google Chrome"
+        case .firefox: return "Firefox"
+        case .arc: return "Arc"
+        case .brave: return "Brave"
+        case .edge: return "Microsoft Edge"
+        case .vivaldi: return "Vivaldi"
+        case .opera: return "Opera"
+        }
+    }
+}
+
 enum PreferredTerminal: String, CaseIterable {
     case auto
     case ghostty
